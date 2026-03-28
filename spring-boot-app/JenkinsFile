@@ -20,7 +20,7 @@ pipeline {
     }
     stage('Build & Test') {
             steps {
-                // Use dir() instead of 'cd' inside 
+                // Use dir() instead of 'cd' inside folder
                 dir('spring-boot-app') {
                     sh 'mvn clean package -DskipTests=false'
                 }
