@@ -55,23 +55,30 @@ pipeline {
     steps {
         withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
             sh """
-                # Tell git this directory is safe (avoids exit code 128)
+                # 1. Setup safety and identity
                 git config --global --add safe.directory ${WORKSPACE}
-                
                 git config user.email "jenkins@yourdomain.com"
                 git config user.name "Jenkins CI"
-                
-                # Verify we are in the right spot
-                ls -la
-                
-                # Update the manifest
+
+                # 2. Switch from 'detached HEAD' to the main branch
+                git checkout main
+
+                # 3. Update the manifest
                 sed -i "s|image: .*${APP_NAME}:.*|image: ${DOCKER_HUB_USER}/${APP_NAME}:${BUILD_NUMBER}|g" spring-boot-app-manifests/deployment.yml
                 
-                git add spring-boot-app-manifests/deployment.yml
-                git commit -m "chore: update image to version ${BUILD_NUMBER} [skip ci]"
-                
-                # Push using the token
-                git push https://${GITHUB_TOKEN}@${GIT_REPO} HEAD:main
+                # 4. Debug: Show the change in the logs
+                echo "Checking manifest change:"
+                grep "image:" spring-boot-app-manifests/deployment.yml
+
+                # 5. Commit and Push only if changes exist
+                if git diff --quiet spring-boot-app-manifests/deployment.yml; then
+                    echo "No changes detected in manifest. Skipping git push."
+                else
+                    git add spring-boot-app-manifests/deployment.yml
+                    git commit -m "chore: update image to version ${BUILD_NUMBER} [skip ci]"
+                    # Use the environment variable safely to avoid the Groovy warning
+                    git push https://\${GITHUB_TOKEN}@${GIT_REPO} main
+                fi
             """
         }
     }
