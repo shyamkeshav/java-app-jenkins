@@ -50,52 +50,48 @@ pipeline {
                 }
             }
         }    
-
-    stage('Update GitOps Manifest') {
+    
+    stage('Cleanup Server') {
+    steps {
+        script {
+            sh "docker rmi ${DOCKER_HUB_USER}/${APP_NAME}:${BUILD_NUMBER} || true"
+            sh "docker rmi ${DOCKER_HUB_USER}/${APP_NAME}:latest || true"
+            sh "docker image prune -f"
+        }
+    }
+    }
+    stage('Update Deployment File') {
+    environment {
+        GIT_REPO_NAME = "java-app-jenkins"
+        GIT_USER_NAME = "shyamkeshav"
+    }
     steps {
         withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
+            // Use double quotes """ to allow Jenkins to pass variables to the shell
             sh """
-                # 1. Setup safety and identity
                 git config --global --add safe.directory ${WORKSPACE}
-                git config user.email "jenkins@yourdomain.com"
-                git config user.name "Jenkins CI"
-
-                # 2. Switch from 'detached HEAD' to the main branch
+                git config user.email "shyam.xyz@gmail.com"
+                git config user.name "shyam sunder"
+                
                 git checkout main
 
-                # 3. Update the manifest
-                sed -i "s|image: .*${APP_NAME}:.*|image: ${DOCKER_HUB_USER}/${APP_NAME}:${BUILD_NUMBER}|g" spring-boot-app-manifests/deployment.yml
+                # This regex finds the image line and replaces the tag at the end, 
+                # regardless of what the previous build number was.
+                sed -i "s|image: .*|        image: ${DOCKER_HUB_USER}/${APP_NAME}:${BUILD_NUMBER}|g" spring-boot-app-manifests/deployment.yml
                 
-                # 4. Debug: Show the change in the logs
-                echo "Checking manifest change:"
-                grep "image:" spring-boot-app-manifests/deployment.yml
-
-                # 5. Commit and Push only if changes exist
-                if git diff --quiet spring-boot-app-manifests/deployment.yml; then
-                    echo "No changes detected in manifest. Skipping git push."
+                git add spring-boot-app-manifests/deployment.yml
+                
+                # Only commit if there is actually a change
+                if ! git diff --cached --quiet; then
+                    git commit -m "Update deployment image to version ${BUILD_NUMBER}"
+                    git push https://\${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
                 else
-                    git add spring-boot-app-manifests/deployment.yml
-                    git commit -m "chore: update image to version ${BUILD_NUMBER} [skip ci]"
-                    # Use the environment variable safely to avoid the Groovy warning
-                    git push https://\${GITHUB_TOKEN}@${GIT_REPO} main
+                    echo "No changes to commit"
                 fi
             """
         }
     }
-}
-    stage('Cleanup Server') {
-            // We use 'always' logic inside a stage to guarantee it runs
-            steps {
-                script {
-                    echo "--- Stage : Automatic Cleanup ---"
-                    // These commands clean the t3.medium regardless of previous stage results
-                    sh "docker rmi ${DOCKER_HUB_USER}:${IMAGE_TAG} || true"
-                    sh "docker rmi ${DOCKER_HUB_USER}:latest || true"
-                    sh "docker logout ghcr.io || true"
-                    sh "docker image prune -f"
-                }
-            }
-        }    
+}    
   }
   post {
         always {
