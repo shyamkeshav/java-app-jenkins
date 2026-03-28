@@ -9,7 +9,7 @@ pipeline {
   environment {
         DOCKER_HUB_USER = "parellishyamsunder"
         APP_NAME        = "ultimate-jenkins-cicd"
-        SONAR_URL       = "http://your-sonar-url:9000"
+        SONAR_URL       = "http://52.66.140.114:9000"
         GIT_REPO        = "github.com/shyamkeshav/java-app-jenkins"
     }
   stages {
@@ -68,6 +68,19 @@ pipeline {
                 }
             }
         }
+    stage('Cleanup Server') {
+            // We use 'always' logic inside a stage to guarantee it runs
+            steps {
+                script {
+                    echo "--- Stage : Automatic Cleanup ---"
+                    // These commands clean the t3.medium regardless of previous stage results
+                    sh "docker rmi ${DOCKER_HUB_USER}:${IMAGE_TAG} || true"
+                    sh "docker rmi ${DOCKER_HUB_USER}:latest || true"
+                    sh "docker logout ghcr.io || true"
+                    sh "docker image prune -f"
+                }
+            }
+        }    
   }
   post {
         always {
