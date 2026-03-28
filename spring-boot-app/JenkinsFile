@@ -52,22 +52,30 @@ pipeline {
         }    
 
     stage('Update GitOps Manifest') {
-            steps {
-                withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
-                    sh '''
-                        git config user.email "jenkins@yourdomain.com"
-                        git config user.name "Jenkins CI"
-                        
-                        # Use sed to update the tag in the manifest file
-                        sed -i "s|image: .*${APP_NAME}:.*|image: ${DOCKER_HUB_USER}/${APP_NAME}:${BUILD_NUMBER}|g" spring-boot-app-manifests/deployment.yml
-                        
-                        git add spring-boot-app-manifests/deployment.yml
-                        git commit -m "chore: update image to version ${BUILD_NUMBER} [skip ci]"
-                        git push https://${GITHUB_TOKEN}@${GIT_REPO} HEAD:main
-                    '''
-                }
-            }
+    steps {
+        withCredentials([string(credentialsId: 'github-token', variable: 'GITHUB_TOKEN')]) {
+            sh """
+                # Tell git this directory is safe (avoids exit code 128)
+                git config --global --add safe.directory ${WORKSPACE}
+                
+                git config user.email "jenkins@yourdomain.com"
+                git config user.name "Jenkins CI"
+                
+                # Verify we are in the right spot
+                ls -la
+                
+                # Update the manifest
+                sed -i "s|image: .*${APP_NAME}:.*|image: ${DOCKER_HUB_USER}/${APP_NAME}:${BUILD_NUMBER}|g" spring-boot-app-manifests/deployment.yml
+                
+                git add spring-boot-app-manifests/deployment.yml
+                git commit -m "chore: update image to version ${BUILD_NUMBER} [skip ci]"
+                
+                # Push using the token
+                git push https://${GITHUB_TOKEN}@${GIT_REPO} HEAD:main
+            """
         }
+    }
+}
     stage('Cleanup Server') {
             // We use 'always' logic inside a stage to guarantee it runs
             steps {
